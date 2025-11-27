@@ -6,7 +6,7 @@ class Router {
     /**
      * @param string $method
      * @param string $route
-     * @param callable(request, response): void $callback
+     * @param callable(array $request): void $callback
      */
     public function add(string $method, string $route, callable $callback): void {
         $this->routes[$method][$route] = $callback;
@@ -19,15 +19,17 @@ class Router {
         $callback = $this->routes[$method][$uri];
         match ($callback) {
             null => http_response_code(404),
-            default => $callback(),
+            default => $callback($_REQUEST),
         };
     }
 }
 
 
 $router = new Router();
-
-$router->add("GET", "/users", function() {
+$router->add("POST", "/users", function (array $req){
+    echo "this should be shown only on post calls";
+});
+$router->add("GET", "/users", function(array $req) {
     echo "hi world";
 });
 
