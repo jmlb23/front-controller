@@ -6,7 +6,7 @@ class Router {
     /**
      * @param string $method
      * @param string $route
-     * @param callable(array $request): void $callback
+     * @param callable(array): void $callback
      */
     public function add(string $method, string $route, callable $callback): void {
         $this->routes[$method][$route] = $callback;
