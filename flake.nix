@@ -21,9 +21,13 @@
         packages = with pkgs; [
           php83
           mysql84
+          git
         ];
         shellHook = ''
+          PS1='\[\e[1m\e[35m\]\u\[\e[0m\] \[\e[1mat\]\[\e[0m\] \[\e[1m\e[34m\]\h\[\e[0m\] \[\e[1min\]\[\e[0m\] \[\e[1m\e[32m\]\w\[\e[0m\] with nix> '
+          PHP_VERSION=$(php -r 'echo phpversion();')
           echo "Welcome to the $system environment!"
+          echo "with php version: $PHP_VERSION"
         '';
       };
     });
