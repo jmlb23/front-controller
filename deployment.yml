@@ -1,0 +1,103 @@
+# ==========================================================
+# 1. ConfigMap: Nginx Configuration (The Routing Fix)
+# ==========================================================
+# This holds the config needed to make Nginx apply the Front Controller pattern
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: php-router-nginx-config
+  labels:
+    app: php-router
+data:
+  default.conf: |
+    server {
+        listen 80;
+        root /var/www/html;
+        index index.php index.html;
+
+        # 🛑 The Front Controller Fix:
+        # 1. Tries the physical URI as a file ($uri)
+        # 2. Tries the physical URI as a directory ($uri/)
+        # 3. If neither is found, internally routes the request to app.php
+        location / {
+            try_files $uri $uri/ /app.php$is_args$args;
+        }
+
+        # Passes all PHP execution requests to the PHP-FPM container
+        location ~ \.php$ {
+            # Target the PHP-FPM container on the shared Pod network interface
+            fastcgi_pass 127.0.0.1:9000;
+            fastcgi_index index.php;
+            include fastcgi_params;
+            # CRITICAL: Ensures the correct file path is sent to PHP-FPM
+            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        }
+    }
+---
+# ==========================================================
+# 2. Deployment: The Two-Container Pod (Sidecar Pattern)
+# ==========================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: php-nginx-sidecar-deployment
+  labels:
+    app: php-router
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: php-router
+  template:
+    metadata:
+      labels:
+        app: php-router
+    spec:
+      # Define shared volumes used by both containers
+      volumes:
+      - name: app-code-share
+        emptyDir: {} # Volume for sharing application code
+      - name: nginx-conf-volume
+        configMap:
+          name: php-router-nginx-config # Volume for Nginx configuration
+      
+      containers:
+      # --- Container A: Nginx (The HTTP Proxy and Router) ---
+      - name: nginx-proxy
+        image: nginx:stable-alpine
+        ports:
+        - containerPort: 80 # Listens for client HTTP traffic
+        volumeMounts:
+        - name: app-code-share
+          mountPath: /var/www/html # Nginx needs access to the code
+        - name: nginx-conf-volume
+          mountPath: /etc/nginx/conf.d/
+          readOnly: true # Load the configuration fix
+        
+      # --- Container B: PHP-FPM (The Application Executor) ---
+      - name: php-fpm-app
+        # Make sure this image is built from your "FROM php:8.2-fpm" Containerfile
+        image: example23/example23:latest 
+        # 🛑 ADDED: Prevents Kubernetes from trying to pull from a remote registry
+        imagePullPolicy: Never
+        volumeMounts:
+        - name: app-code-share
+          mountPath: /var/www/html # PHP-FPM needs access to the code
+        # PHP-FPM listens internally on 9000 and requires no exposed port here.
+
+---
+# ==========================================================
+# 3. Service: Expose the Web App
+# ==========================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: php-router-service
+spec:
+  selector:
+    app: php-router
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80 # Target the Nginx container's port
+  type: LoadBalancer # Use LoadBalancer or NodePort for external access
