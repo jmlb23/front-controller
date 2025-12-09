@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sidecar
+  labels:
+    app: sidecar
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sidecar
+  template:
+    metadata:
+      labels:
+        app: sidecar
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.29.3
+        ports:
+        - containerPort: 80
+      - name: fmp-php
+        imagePullPolicy: Always
+        image: docker.io/jmlb23/php-app:latest
